@@ -1,7 +1,7 @@
 import os
 import logging
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
 import google.generativeai as genai
 from PIL import Image
 
@@ -62,12 +62,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "¡Hola, trader! 🚀 Envíame una captura de pantalla de tu gráfico y te daré el análisis técnico inmediato para operar."
     )
 
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "¡Hola! Para recibir tu análisis, envíame directamente la captura de pantalla de tu gráfico de trading. 📊"
+    )
+
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), start))
+    # Manejador del comando /start
+    app.add_handler(CommandHandler("start", start))
+    
+    # Manejador para mensajes de texto normales
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
+    
+    # Manejador para fotos
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.COMMAND, start))
     
     print("Bot iniciado correctamente y escuchando...")
     app.run_polling()
