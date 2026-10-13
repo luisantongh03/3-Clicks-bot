@@ -2,7 +2,7 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
-import google.generativeai as genai
+from google import genai
 from PIL import Image
 
 logging.basicConfig(
@@ -16,15 +16,14 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not TELEGRAM_TOKEN or not GEMINI_API_KEY:
     raise ValueError("Faltan TELEGRAM_TOKEN o GEMINI_API_KEY en las variables de entorno.")
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("🔍 Analizando gráfico de trading... Por favor espera un momento.")
     
+    photo_path = "temp_chart.jpg"
     try:
         photo_file = await update.message.photo[-1].get_file()
-        photo_path = "temp_chart.jpg"
         await photo_file.download_to_drive(photo_path)
         
         img = Image.open(photo_path)
@@ -38,24 +37,27 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "3. Señal clara de operación (COMPRA/CALL o VENTA/PUT) con un nivel de confianza (Alto/Medio/Bajo) y una justificación breve y directa."
         )
         
-        response = model.generate_content([prompt, img])
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[prompt, img]
+        )
         
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=msg.message_id,
             text=response.text
         )
-        
-        if os.path.exists(photo_path):
-            os.remove(photo_path)
             
     except Exception as e:
-        logging.error(f"Error procesando la imagen: {e}")
+        logging.error(f"Error procesando la imagen: {e}", exc_info=True)
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=msg.message_id,
-            text="❌ Ocurrió un error al procesar el gráfico. Asegúrate de que la imagen sea clara y vuelve a intentarlo."
+            text="❌ Ocurrió un error al procesar el gráfico. Asegúrate de que la API KEY de Gemini sea válida y vuelve a intentarlo."
         )
+    finally:
+        if os.path.exists(photo_path):
+            os.remove(photo_path)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -70,14 +72,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
-    # Manejador del comando /start
     app.add_handler(CommandHandler("start", start))
-    
-    # Manejador para mensajes de texto normales
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
-    
-    # Manejador para fotos
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
     
     print("Bot iniciado correctamente y escuchando...")
     app.run_polling()
