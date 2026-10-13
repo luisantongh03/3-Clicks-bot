@@ -20,8 +20,8 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("🔍 Analizando gráfico de trading... Por favor espera un momento.")
-    
     photo_path = "temp_chart.jpg"
+    
     try:
         photo_file = await update.message.photo[-1].get_file()
         await photo_file.download_to_drive(photo_path)
@@ -50,14 +50,18 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     except Exception as e:
         logging.error(f"Error procesando la imagen: {e}", exc_info=True)
+        error_msg = f"❌ Error al procesar: {str(e)}"
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=msg.message_id,
-            text="❌ Ocurrió un error al procesar el gráfico. Asegúrate de que la API KEY de Gemini sea válida y vuelve a intentarlo."
+            text=error_msg[:4000]
         )
     finally:
         if os.path.exists(photo_path):
-            os.remove(photo_path)
+            try:
+                os.remove(photo_path)
+            except Exception:
+                pass
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
